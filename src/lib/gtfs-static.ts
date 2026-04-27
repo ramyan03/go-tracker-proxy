@@ -102,9 +102,14 @@ async function loadGtfs(): Promise<void> {
     return;
   }
 
+  const HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; GOTrackerProxy/1.0)",
+    "Accept": "application/zip, application/octet-stream, */*",
+  };
+
   // Cheap HEAD check first — avoid re-downloading if unchanged
   try {
-    const headRes = await fetch(GTFS_ZIP_URL, { method: "HEAD" });
+    const headRes = await fetch(GTFS_ZIP_URL, { method: "HEAD", headers: HEADERS });
     const newEtag =
       headRes.headers.get("etag") ?? headRes.headers.get("last-modified");
     if (newEtag && newEtag === currentEtag && data) {
@@ -118,8 +123,12 @@ async function loadGtfs(): Promise<void> {
   }
 
   console.log("[gtfs-static] Downloading GTFS zip…");
-  const res = await fetch(GTFS_ZIP_URL);
+  const res = await fetch(GTFS_ZIP_URL, { headers: HEADERS });
   if (!res.ok) throw new Error(`GTFS download failed: ${res.status} ${res.statusText}`);
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("text/html")) {
+    throw new Error(`GTFS download returned HTML — URL may be blocked or changed`);
+  }
 
   const buf = await res.buffer();
   console.log(`[gtfs-static] Downloaded ${(buf.length / 1024 / 1024).toFixed(1)} MB — parsing…`);
