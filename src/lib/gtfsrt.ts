@@ -3,9 +3,9 @@ import { metrolinxProto } from "./metrolinx";
 
 // Correct GTFS-RT feed paths (confirmed from API docs)
 const FEEDS = {
-  trips:    "api/V1/Gtfs/Feed/TripUpdates.proto",
-  alerts:   "api/V1/Gtfs/Feed/Alerts.proto",
-  vehicles: "api/V1/Gtfs/Feed/VehiclePosition.proto",
+  trips:    "api/V1/Gtfs/Feed/TripUpdates",
+  alerts:   "api/V1/Gtfs/Feed/Alerts",
+  vehicles: "api/V1/Gtfs/Feed/VehiclePosition",
 } as const;
 
 async function decodeFeed(path: string): Promise<transit_realtime.IFeedMessage> {
