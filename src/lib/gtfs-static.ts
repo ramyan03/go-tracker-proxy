@@ -139,7 +139,18 @@ async function loadGtfs(): Promise<void> {
   const routes = parseRoutes(zip);
   const trips = parseTrips(zip);
   const { calendar, calendarDates } = parseCalendarFiles(zip);
-  const stopTimesIndex = parseStopTimes(zip);
+
+  // Train stop_ids are 2–3 char codes (UN, MK, OA, etc.). Filtering stop_times
+  // to these ~70 stations drops memory from ~400 MB to ~50 MB on Railway.
+  const trainStopIds = new Set<string>();
+  for (const stop of stops.values()) {
+    if (stop.stop_id.length <= 3) trainStopIds.add(stop.stop_id);
+  }
+
+  const stopTimesEntry = zip.getEntry("stop_times.txt");
+  const stopTimesIndex = stopTimesEntry
+    ? parseStopTimesFromBuffer(stopTimesEntry.getData(), trainStopIds)
+    : new Map<string, GtfsStopTime[]>();
 
   const tripTimesIndex = buildTripTimesIndex(stopTimesIndex);
 
@@ -375,6 +386,56 @@ export function parseCalendarFilesFromText(
 
 function parseStopTimes(zip: AdmZip): Map<string, GtfsStopTime[]> {
   return parseStopTimesFromText(getEntryText(zip, "stop_times.txt"));
+}
+
+// Buffer-based parser: processes stop_times.txt line-by-line without allocating
+// a full decompressed string or lines array — critical for Railway's 512 MB limit.
+function parseStopTimesFromBuffer(buf: Buffer, allowedStopIds: Set<string>): Map<string, GtfsStopTime[]> {
+  const index = new Map<string, GtfsStopTime[]>();
+
+  let pos = (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) ? 3 : 0;
+  let lineStart = pos;
+  let isHeader = true;
+  let iTrip = -1, iDep = -1, iStop = -1, iSeq = -1;
+
+  while (pos <= buf.length) {
+    if (pos === buf.length || buf[pos] === 0x0A) {
+      const end = (pos > lineStart && buf[pos - 1] === 0x0D) ? pos - 1 : pos;
+      if (end > lineStart) {
+        const line = buf.slice(lineStart, end).toString("utf8");
+        if (isHeader) {
+          const headers = parseCSVLine(line).map((h) => h.trim());
+          iTrip = headers.indexOf("trip_id");
+          iDep  = headers.indexOf("departure_time");
+          iStop = headers.indexOf("stop_id");
+          iSeq  = headers.indexOf("stop_sequence");
+          isHeader = false;
+        } else {
+          const vals = parseCSVLine(line);
+          const stopId = (vals[iStop] ?? "").trim();
+          if (stopId && allowedStopIds.has(stopId)) {
+            const st: GtfsStopTime = {
+              trip_id:        (vals[iTrip] ?? "").trim(),
+              departure_time: (vals[iDep]  ?? "").trim(),
+              stop_id:        stopId,
+              stop_sequence:  parseInt(vals[iSeq] ?? "0") || 0,
+            };
+            const bucket = index.get(stopId);
+            if (bucket) bucket.push(st);
+            else index.set(stopId, [st]);
+          }
+        }
+      }
+      lineStart = pos + 1;
+    }
+    pos++;
+  }
+
+  for (const bucket of index.values()) {
+    bucket.sort((a, b) => a.departure_time.localeCompare(b.departure_time));
+  }
+
+  return index;
 }
 
 export function parseStopTimesFromText(text: string | null): Map<string, GtfsStopTime[]> {
