@@ -62,7 +62,7 @@ export interface GtfsData {
 // ── Singleton ─────────────────────────────────────────────────────────────────
 
 const GTFS_ZIP_URL =
-  "https://www.gotransit.com/static_files/gotransit/assets/Files/GO_GTFS.zip";
+  "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip";
 const REFRESH_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 let data: GtfsData | null = null;

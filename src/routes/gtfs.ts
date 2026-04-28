@@ -6,7 +6,7 @@ import { gtfsEtag, gtfsLoadedAt } from "../lib/gtfs-static";
 const router = Router();
 
 const GTFS_ZIP_URL =
-  "https://www.gotransit.com/static_files/gotransit/assets/Files/GO_GTFS.zip";
+  "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip";
 
 async function fetchGtfsVersion(): Promise<{
   version: string;
