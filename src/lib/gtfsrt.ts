@@ -72,10 +72,19 @@ export async function fetchTripUpdates(): Promise<{
 // ── Service alerts ────────────────────────────────────────────────────────────
 
 export type AlertSeverity = "minor" | "major" | "cancelled";
+export type AlertEffect =
+  | "significant_delays"
+  | "detour"
+  | "no_service"
+  | "reduced_service"
+  | "modified_service"
+  | "stop_moved"
+  | "other";
 
 export interface ServiceAlert {
   id: string;
   severity: AlertSeverity;
+  effect: AlertEffect;
   affected_routes: string[];
   affected_stops: string[];
   header: string;
@@ -124,6 +133,7 @@ export async function fetchAlerts(): Promise<{
     alerts.push({
       id:              entity.id ?? "",
       severity,
+      effect:          mapEffect(effect),
       affected_routes: [...new Set(affectedRoutes)],
       affected_stops:  [...new Set(affectedStops)],
       header:          translatedText(a.headerText) ?? "",
@@ -166,6 +176,18 @@ function stuSchedRel(
     case transit_realtime.TripUpdate.StopTimeUpdate.ScheduleRelationship.SKIPPED:  return "skipped";
     case transit_realtime.TripUpdate.StopTimeUpdate.ScheduleRelationship.NO_DATA:  return "no_data";
     default: return "scheduled";
+  }
+}
+
+function mapEffect(e: transit_realtime.Alert.Effect | null | undefined): AlertEffect {
+  switch (e) {
+    case transit_realtime.Alert.Effect.SIGNIFICANT_DELAYS: return "significant_delays";
+    case transit_realtime.Alert.Effect.DETOUR:             return "detour";
+    case transit_realtime.Alert.Effect.NO_SERVICE:         return "no_service";
+    case transit_realtime.Alert.Effect.REDUCED_SERVICE:    return "reduced_service";
+    case transit_realtime.Alert.Effect.MODIFIED_SERVICE:   return "modified_service";
+    case transit_realtime.Alert.Effect.STOP_MOVED:         return "stop_moved";
+    default:                                               return "other";
   }
 }
 

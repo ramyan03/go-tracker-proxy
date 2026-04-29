@@ -84,6 +84,55 @@ router.get("/station", async (req: Request, res: Response) => {
   }
 });
 
+// ── Last Departure ────────────────────────────────────────────────────────────
+// GET /v1/schedule/lastdeparture?stop_id=UN&date=20260429
+// Returns the last train departure time for a stop on a given date.
+router.get("/lastdeparture", async (req: Request, res: Response) => {
+  const stopId = (req.query.stop_id as string)?.toUpperCase();
+  const date   = (req.query.date as string) || getTodayStr();
+
+  if (!stopId) {
+    return res.status(400).json({ error: "bad_request", message: "stop_id required" });
+  }
+
+  try {
+    const gtfs = await ensureGtfs();
+    const stop = gtfs.stops.get(stopId) ?? gtfs.stopsByCode.get(stopId) ?? null;
+    const resolvedId = stop?.stop_id ?? stopId;
+
+    const dow            = getDowForDate(date);
+    const activeServices = getActiveServiceIds(gtfs, date, dow);
+    const midnightMs     = getMidnightMsForDate(date);
+
+    const rawTimes = gtfs.stopTimesIndex.get(resolvedId) ?? [];
+
+    let lastDepTime: string | null = null;
+
+    for (const st of rawTimes) {
+      const trip = gtfs.trips.get(st.trip_id);
+      if (!trip || !activeServices.has(trip.service_id)) continue;
+      if (!lastDepTime || st.departure_time > lastDepTime) {
+        lastDepTime = st.departure_time;
+      }
+    }
+
+    const lastDepIso = lastDepTime
+      ? parseGtfsTime(lastDepTime, midnightMs).toISOString()
+      : null;
+
+    return res.json({
+      stop_id:            resolvedId,
+      stop_name:          stop?.stop_name ?? stopId,
+      date,
+      last_departure_iso: lastDepIso,
+    });
+  } catch (err) {
+    const message = (err as Error).message;
+    console.error("[schedule/lastdeparture]", message);
+    return res.status(502).json({ error: "upstream_error", message });
+  }
+});
+
 // ── Journey Planner ────────────────────────────────────────────────────────────
 // GET /v1/schedule/journey?from=MK&to=UN&date=20260421&time=07:00&limit=10
 // Finds trips calling at both stops in order, departing from `from` at or after `time`.

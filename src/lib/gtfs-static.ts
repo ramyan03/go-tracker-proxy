@@ -46,6 +46,13 @@ export interface GtfsCalendar {
   end_date: string;
 }
 
+export interface GtfsTransfer {
+  from_stop_id: string;
+  to_stop_id: string;
+  transfer_type: number; // 0=recommended, 1=timed, 2=minimum time, 3=not possible
+  min_transfer_time: number | null; // seconds; null when not specified
+}
+
 export interface GtfsData {
   etag: string | null;
   loadedAt: Date;
@@ -57,6 +64,7 @@ export interface GtfsData {
   tripTimesIndex: Map<string, GtfsStopTime[]>; // trip_id → stop times sorted by sequence
   calendar: Map<string, GtfsCalendar>;   // service_id → Calendar
   calendarDates: Map<string, { date: string; exceptionType: 1 | 2 }[]>; // service_id → []
+  transfers: Map<string, GtfsTransfer[]>; // from_stop_id → transfers
 }
 
 // ── Singleton ─────────────────────────────────────────────────────────────────
@@ -179,6 +187,11 @@ async function loadGtfs(): Promise<void> {
     }
   }
 
+  const transfersEntry = zip.getEntry("transfers.txt");
+  const transfers = transfersEntry
+    ? parseTransfersFromText(transfersEntry.getData().toString("utf8"))
+    : new Map<string, GtfsTransfer[]>();
+
   data = {
     etag: currentEtag,
     loadedAt: new Date(),
@@ -190,12 +203,13 @@ async function loadGtfs(): Promise<void> {
     tripTimesIndex,
     calendar,
     calendarDates,
+    transfers,
   };
   lastLoaded = Date.now();
 
   console.log(
     `[gtfs-static] Ready — ${stops.size} stops, ${routes.size} routes, ` +
-    `${trips.size} trips, ${stopTimesIndex.size} stops with times`
+    `${trips.size} trips, ${stopTimesIndex.size} stops with times, ${transfers.size} transfer origins`
   );
 }
 
@@ -216,8 +230,8 @@ function parseFromDirectory(dir: string): void {
     getEntryTextFromDir("calendar_dates.txt")
   );
   const stopTimesIndex = parseStopTimesFromText(getEntryTextFromDir("stop_times.txt"));
-
   const tripTimesIndex = buildTripTimesIndex(stopTimesIndex);
+  const transfers = parseTransfersFromText(getEntryTextFromDir("transfers.txt"));
 
   data = {
     etag: null,
@@ -230,6 +244,7 @@ function parseFromDirectory(dir: string): void {
     tripTimesIndex,
     calendar,
     calendarDates,
+    transfers,
   };
   lastLoaded = Date.now();
 
@@ -555,6 +570,26 @@ export function parseStopTimesFromText(text: string | null): Map<string, GtfsSto
   }
 
   return index;
+}
+
+function parseTransfersFromText(text: string | null): Map<string, GtfsTransfer[]> {
+  if (!text) return new Map();
+  const map = new Map<string, GtfsTransfer[]>();
+  const clean = text.replace(/^﻿/, "");
+  for (const row of parseCSV(clean)) {
+    if (!row.from_stop_id || !row.to_stop_id) continue;
+    if (row.from_stop_id === row.to_stop_id) continue;
+    const t: GtfsTransfer = {
+      from_stop_id:      row.from_stop_id,
+      to_stop_id:        row.to_stop_id,
+      transfer_type:     parseInt(row.transfer_type) || 0,
+      min_transfer_time: row.min_transfer_time ? parseInt(row.min_transfer_time) : null,
+    };
+    const bucket = map.get(row.from_stop_id);
+    if (bucket) bucket.push(t);
+    else map.set(row.from_stop_id, [t]);
+  }
+  return map;
 }
 
 // ── Calendar helpers ──────────────────────────────────────────────────────────

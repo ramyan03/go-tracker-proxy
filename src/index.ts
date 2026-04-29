@@ -2,15 +2,16 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 
-import realtimeRouter   from "./routes/realtime";
-import gtfsRouter       from "./routes/gtfs";
-import departuresRouter from "./routes/departures";
-import stopsRouter      from "./routes/stops";
-import routesRouter     from "./routes/routes";
-import fleetRouter      from "./routes/fleet";
-import compareRouter    from "./routes/compare";
-import guaranteeRouter  from "./routes/guarantee";
-import scheduleRouter   from "./routes/schedule";
+import realtimeRouter     from "./routes/realtime";
+import gtfsRouter         from "./routes/gtfs";
+import departuresRouter   from "./routes/departures";
+import stopsRouter        from "./routes/stops";
+import routesRouter       from "./routes/routes";
+import fleetRouter        from "./routes/fleet";
+import compareRouter      from "./routes/compare";
+import guaranteeRouter    from "./routes/guarantee";
+import scheduleRouter     from "./routes/schedule";
+import connectionsRouter  from "./routes/connections";
 
 import { ensureGtfs } from "./lib/gtfs-static";
 
@@ -33,15 +34,16 @@ app.get("/health", (_req, res) => {
 });
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.use("/v1/realtime",   realtimeRouter);
-app.use("/v1/gtfs",       gtfsRouter);
-app.use("/v1/departures", departuresRouter);
-app.use("/v1/stops",      stopsRouter);
-app.use("/v1/routes",     routesRouter);
-app.use("/v1/fleet",      fleetRouter);
-app.use("/v1/compare",    compareRouter);
-app.use("/v1/guarantee",  guaranteeRouter);
-app.use("/v1/schedule",   scheduleRouter);
+app.use("/v1/realtime",    realtimeRouter);
+app.use("/v1/gtfs",        gtfsRouter);
+app.use("/v1/departures",  departuresRouter);
+app.use("/v1/stops",       stopsRouter);
+app.use("/v1/routes",      routesRouter);
+app.use("/v1/fleet",       fleetRouter);
+app.use("/v1/compare",     compareRouter);
+app.use("/v1/guarantee",   guaranteeRouter);
+app.use("/v1/schedule",    scheduleRouter);
+app.use("/v1/connections", connectionsRouter);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {

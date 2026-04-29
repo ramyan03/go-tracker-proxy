@@ -40,6 +40,8 @@ No Upstash Redis locally — falls back to in-memory cache (fine for dev).
 | GET | `/v1/guarantee` | `trip_id` — service guarantee eligibility |
 | GET | `/v1/schedule/station` | `stop_id`, `date=YYYYMMDD`, `limit` |
 | GET | `/v1/schedule/journey` | `from`, `to`, `date`, `time=HH:MM`, `limit` |
+| GET | `/v1/schedule/lastdeparture` | `stop_id`, `date=YYYYMMDD` — last train time for that day |
+| GET | `/v1/connections` | `stop_id` — GTFS transfers from that stop (max 8) |
 
 ## Cache TTLs
 
