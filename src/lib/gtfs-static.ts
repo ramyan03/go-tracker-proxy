@@ -147,12 +147,37 @@ async function loadGtfs(): Promise<void> {
     if (stop.stop_id.length <= 3) trainStopIds.add(stop.stop_id);
   }
 
+  // For bus routes: pick one representative trip per route+direction so that
+  // route-detail can show stop sequences. ~130 trips × ~25 stops = negligible memory.
+  const busRepTripIds = new Set<string>();
+  {
+    const seen = new Map<string, Set<number>>();
+    for (const trip of trips.values()) {
+      const route = routes.get(trip.route_id);
+      if (!route || route.route_type !== 3) continue;
+      if (!seen.has(route.route_short_name)) seen.set(route.route_short_name, new Set());
+      const dirs = seen.get(route.route_short_name)!;
+      if (!dirs.has(trip.direction_id)) {
+        dirs.add(trip.direction_id);
+        busRepTripIds.add(trip.trip_id);
+      }
+    }
+  }
+
   const stopTimesEntry = zip.getEntry("stop_times.txt");
   const stopTimesIndex = stopTimesEntry
     ? parseStopTimesFromBuffer(stopTimesEntry.getData(), trainStopIds)
     : new Map<string, GtfsStopTime[]>();
 
   const tripTimesIndex = buildTripTimesIndex(stopTimesIndex);
+
+  // Merge bus representative trip stop sequences into tripTimesIndex
+  if (stopTimesEntry && busRepTripIds.size > 0) {
+    const busTrips = parseBusRepTripTimes(stopTimesEntry.getData(), busRepTripIds);
+    for (const [tripId, times] of busTrips) {
+      tripTimesIndex.set(tripId, times);
+    }
+  }
 
   data = {
     etag: currentEtag,
@@ -433,6 +458,56 @@ function parseStopTimesFromBuffer(buf: Buffer, allowedStopIds: Set<string>): Map
 
   for (const bucket of index.values()) {
     bucket.sort((a, b) => a.departure_time.localeCompare(b.departure_time));
+  }
+
+  return index;
+}
+
+// Scans stop_times.txt for a specific set of trip_ids, indexed by trip_id.
+// Used to load bus representative trip sequences without inflating memory.
+function parseBusRepTripTimes(buf: Buffer, allowedTripIds: Set<string>): Map<string, GtfsStopTime[]> {
+  const index = new Map<string, GtfsStopTime[]>();
+
+  let pos = (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) ? 3 : 0;
+  let lineStart = pos;
+  let isHeader = true;
+  let iTrip = -1, iDep = -1, iStop = -1, iSeq = -1;
+
+  while (pos <= buf.length) {
+    if (pos === buf.length || buf[pos] === 0x0A) {
+      const end = (pos > lineStart && buf[pos - 1] === 0x0D) ? pos - 1 : pos;
+      if (end > lineStart) {
+        const line = buf.slice(lineStart, end).toString("utf8");
+        if (isHeader) {
+          const headers = parseCSVLine(line).map((h) => h.trim());
+          iTrip = headers.indexOf("trip_id");
+          iDep  = headers.indexOf("departure_time");
+          iStop = headers.indexOf("stop_id");
+          iSeq  = headers.indexOf("stop_sequence");
+          isHeader = false;
+        } else {
+          const vals = parseCSVLine(line);
+          const tripId = (vals[iTrip] ?? "").trim();
+          if (tripId && allowedTripIds.has(tripId)) {
+            const st: GtfsStopTime = {
+              trip_id:        tripId,
+              departure_time: (vals[iDep]  ?? "").trim(),
+              stop_id:        (vals[iStop] ?? "").trim(),
+              stop_sequence:  parseInt(vals[iSeq] ?? "0") || 0,
+            };
+            const bucket = index.get(tripId);
+            if (bucket) bucket.push(st);
+            else index.set(tripId, [st]);
+          }
+        }
+      }
+      lineStart = pos + 1;
+    }
+    pos++;
+  }
+
+  for (const bucket of index.values()) {
+    bucket.sort((a, b) => a.stop_sequence - b.stop_sequence);
   }
 
   return index;
