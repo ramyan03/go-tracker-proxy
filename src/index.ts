@@ -12,6 +12,7 @@ import compareRouter      from "./routes/compare";
 import guaranteeRouter    from "./routes/guarantee";
 import scheduleRouter     from "./routes/schedule";
 import connectionsRouter  from "./routes/connections";
+import faresRouter        from "./routes/fares";
 
 import { ensureGtfs } from "./lib/gtfs-static";
 
@@ -44,6 +45,7 @@ app.use("/v1/compare",     compareRouter);
 app.use("/v1/guarantee",   guaranteeRouter);
 app.use("/v1/schedule",    scheduleRouter);
 app.use("/v1/connections", connectionsRouter);
+app.use("/v1/fares",      faresRouter);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {

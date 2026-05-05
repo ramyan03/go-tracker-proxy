@@ -12,6 +12,7 @@ export interface GtfsStop {
   stop_lat: number;
   stop_lon: number;
   wheelchair_boarding: number;
+  zone_id: string;
 }
 
 export interface GtfsRoute {
@@ -65,6 +66,7 @@ export interface GtfsData {
   calendar: Map<string, GtfsCalendar>;   // service_id → Calendar
   calendarDates: Map<string, { date: string; exceptionType: 1 | 2 }[]>; // service_id → []
   transfers: Map<string, GtfsTransfer[]>; // from_stop_id → transfers
+  fares: Map<string, number>;            // "fromZone-toZone" → CAD price (Presto)
 }
 
 // ── Singleton ─────────────────────────────────────────────────────────────────
@@ -192,6 +194,11 @@ async function loadGtfs(): Promise<void> {
     ? parseTransfersFromText(transfersEntry.getData().toString("utf8"))
     : new Map<string, GtfsTransfer[]>();
 
+  const faresEntry = zip.getEntry("fare_attributes.txt");
+  const fares = faresEntry
+    ? parseFareAttributesFromText(faresEntry.getData().toString("utf8"))
+    : new Map<string, number>();
+
   data = {
     etag: currentEtag,
     loadedAt: new Date(),
@@ -204,6 +211,7 @@ async function loadGtfs(): Promise<void> {
     calendar,
     calendarDates,
     transfers,
+    fares,
   };
   lastLoaded = Date.now();
 
@@ -232,6 +240,7 @@ function parseFromDirectory(dir: string): void {
   const stopTimesIndex = parseStopTimesFromText(getEntryTextFromDir("stop_times.txt"));
   const tripTimesIndex = buildTripTimesIndex(stopTimesIndex);
   const transfers = parseTransfersFromText(getEntryTextFromDir("transfers.txt"));
+  const fares = parseFareAttributesFromText(getEntryTextFromDir("fare_attributes.txt"));
 
   data = {
     etag: null,
@@ -245,6 +254,7 @@ function parseFromDirectory(dir: string): void {
     calendar,
     calendarDates,
     transfers,
+    fares,
   };
   lastLoaded = Date.now();
 
@@ -310,7 +320,21 @@ export function parseStopsFromText(text: string | null): Map<string, GtfsStop> {
       stop_lat: parseFloat(row.stop_lat) || 0,
       stop_lon: parseFloat(row.stop_lon) || 0,
       wheelchair_boarding: parseInt(row.wheelchair_boarding) || 0,
+      zone_id: row.zone_id?.trim() ?? "",
     });
+  }
+  return map;
+}
+
+// fare_id = "${origin_zone}-${dest_zone}" \u2192 price in CAD (Presto)
+export function parseFareAttributesFromText(text: string | null): Map<string, number> {
+  if (!text) return new Map();
+  const map = new Map<string, number>();
+  const clean = text.replace(/^\uFEFF/, "");
+  for (const row of parseCSV(clean)) {
+    if (!row.fare_id || !row.price) continue;
+    const price = parseFloat(row.price);
+    if (!isNaN(price)) map.set(row.fare_id, price);
   }
   return map;
 }
