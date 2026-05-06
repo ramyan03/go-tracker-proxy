@@ -145,6 +145,61 @@ export async function fetchAlerts(): Promise<{
   return { generated_at: generatedAt, alerts };
 }
 
+// ── Vehicle positions ─────────────────────────────────────────────────────────
+
+export type VehicleStatus = "stopped_at" | "incoming_at" | "in_transit_to";
+
+export interface VehiclePosition {
+  vehicle_id: string;
+  vehicle_label: string | null;
+  trip_id: string;
+  route_id: string;
+  route_short_name: string;
+  latitude: number;
+  longitude: number;
+  bearing: number | null;
+  speed_ms: number | null;
+  current_status: VehicleStatus;
+  stop_id: string | null;
+  timestamp: string;
+}
+
+export async function fetchVehiclePositions(): Promise<{
+  generated_at: string;
+  vehicles: VehiclePosition[];
+}> {
+  const feed = await decodeFeed(FEEDS.vehicles);
+  const generatedAt = tsToIso(feed.header?.timestamp);
+  const vehicles: VehiclePosition[] = [];
+
+  for (const entity of feed.entity ?? []) {
+    const vp = entity.vehicle;
+    if (!vp?.position) continue;
+
+    const rawRouteId = vp.trip?.routeId ?? "";
+    const routeShortName = rawRouteId.includes("-")
+      ? rawRouteId.split("-").pop() ?? rawRouteId
+      : rawRouteId;
+
+    vehicles.push({
+      vehicle_id:       vp.vehicle?.id ?? entity.id ?? "",
+      vehicle_label:    vp.vehicle?.label ?? null,
+      trip_id:          vp.trip?.tripId ?? "",
+      route_id:         rawRouteId,
+      route_short_name: routeShortName,
+      latitude:         vp.position.latitude,
+      longitude:        vp.position.longitude,
+      bearing:          vp.position.bearing ?? null,
+      speed_ms:         vp.position.speed   ?? null,
+      current_status:   vehicleStatus(vp.currentStatus),
+      stop_id:          vp.stopId ?? null,
+      timestamp:        tsToIso(vp.timestamp),
+    });
+  }
+
+  return { generated_at: generatedAt, vehicles };
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function tsToIso(ts: number | Long | null | undefined): string {
@@ -188,6 +243,16 @@ function mapEffect(e: transit_realtime.Alert.Effect | null | undefined): AlertEf
     case transit_realtime.Alert.Effect.MODIFIED_SERVICE:   return "modified_service";
     case transit_realtime.Alert.Effect.STOP_MOVED:         return "stop_moved";
     default:                                               return "other";
+  }
+}
+
+function vehicleStatus(
+  s: transit_realtime.VehiclePosition.VehicleStopStatus | null | undefined
+): VehicleStatus {
+  switch (s) {
+    case transit_realtime.VehiclePosition.VehicleStopStatus.STOPPED_AT:    return "stopped_at";
+    case transit_realtime.VehiclePosition.VehicleStopStatus.INCOMING_AT:   return "incoming_at";
+    default: return "in_transit_to";
   }
 }
 

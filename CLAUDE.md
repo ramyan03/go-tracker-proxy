@@ -28,6 +28,7 @@ No Upstash Redis locally — falls back to in-memory cache (fine for dev).
 | GET | `/v1/departures` | `stop_id`, `limit`, `window_hours` — GTFS static + GTFS-RT merge |
 | GET | `/v1/realtime/trips` | GTFS-RT trip updates (30s cache) |
 | GET | `/v1/realtime/alerts` | GTFS-RT service alerts (60s cache) |
+| GET | `/v1/realtime/vehicles` | GTFS-RT vehicle positions (30s cache) |
 | GET | `/v1/gtfs/version` | GTFS zip Last-Modified/ETag |
 | GET | `/v1/gtfs/download` | Streams GTFS zip |
 | GET | `/v1/gtfs/status` | Internal GTFS static cache state |
